@@ -3,3 +3,4 @@ from . import static
 from . import kernels
 from . import projections
 from . import utils
+from . import tests
