@@ -109,8 +109,6 @@ class SignatureKernel(SignatureBase):
                 K_X_sqrt = utils.robust_sqrt(signature_kern(self.static_kernel(X), self.n_levels, order=self.order, difference=self.difference))
                 K_Y_sqrt = utils.robust_sqrt(signature_kern(self.static_kernel(Y), self.n_levels, order=self.order, difference=self.difference))
                 K /= K_X_sqrt[:, None] * K_Y_sqrt[None, :]
-        elif self.normalization == 3:
-            pass
 
         return self.sigma**2 * K
 
