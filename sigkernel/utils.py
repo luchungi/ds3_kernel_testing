@@ -21,20 +21,25 @@ def check_positive_value(scalar : Number, name : str) -> Number:
     if scalar <= 0:
         raise ValueError(f'The parameter \'{name}\' should have a positive value.')
     return scalar
-    
+
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 # (Batched) computations
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-def matrix_diag(A : ArrayOnGPU) -> ArrayOnGPU:
+def matrix_diag(A : ArrayOnCPUOrGPU) -> ArrayOnCPUOrGPU:
     """Takes as input an array of shape (..., d, d) and returns the diagonals along the last two axes with output shape (..., d)."""
-    return cp.einsum('...ii->...i', A)
+    if type(A) is ArrayOnCPU:
+        return np.einsum('...ii->...i', A)
+    elif type(A) is ArrayOnGPU:
+        return cp.einsum('...ii->...i', A)
+    else:
+        raise ValueError('The input array should be either a numpy.ndarray or a cupy.ndarray.')
 
 def matrix_mult(X : ArrayOnGPU, Y : Optional[ArrayOnGPU] = None, transpose_X : bool = False, transpose_Y : bool = False) -> ArrayOnGPU:
     subscript_X = '...ji' if transpose_X else '...ij'
     subscript_Y = '...kj' if transpose_Y else '...jk'
     return cp.einsum(f'{subscript_X},{subscript_Y}->...ik', X, Y if Y is not None else X)
-    
+
 def squared_norm(X : ArrayOnGPU, axis : int = -1) -> ArrayOnGPU:
     return cp.sum(cp.square(X), axis=axis)
 
@@ -46,19 +51,19 @@ def squared_euclid_dist(X : ArrayOnGPU, Y : Optional[ArrayOnGPU] = None) -> Arra
         Y_n2 = squared_norm(Y, axis=-1)
         D2 = (X_n2[..., :, None] + Y_n2[..., None, :]) - 2 * matrix_mult(X, Y, transpose_Y=True)
     return D2
-    
+
 def outer_prod(X : ArrayOnGPU, Y : ArrayOnGPU) -> ArrayOnGPU:
     return cp.reshape(X[..., :, None] * Y[..., None, :], X.shape[:-1] + (-1,))
-    
+
 def robust_sqrt(X : ArrayOnGPU) -> ArrayOnGPU:
     return cp.sqrt(cp.maximum(X, 1e-20))
-    
+
 def euclid_dist(self, X : ArrayOnGPU, Y : Optional[ArrayOnGPU] = None) -> ArrayOnGPU:
     return robust_sqrt(squared_euclid_dist(X, Y))
-    
+
 def robust_nonzero(X : ArrayOnGPU) -> ArrayOnGPU:
     return cp.abs(X) > 1e-10
-    
+
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Probability stuff
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -77,11 +82,11 @@ def draw_rademacher_matrix(shape : Union[List[int], Tuple[int]], random_state : 
 def draw_bernoulli_matrix(shape : Union[List[int], Tuple[int]], prob : float, random_state : Optional[RandomStateOrSeed] = None) -> ArrayOnGPU:
     random_state = check_random_state(random_state)
     return cp.where(random_state.uniform(size=shape) < prob, cp.ones(shape), cp.zeros(shape))
-    
+
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 # Projection stuff
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
-    
+
 def subsample_outer_prod_comps(X : ArrayOnGPU, Z : ArrayOnGPU, sampled_idx : Union[ArrayOnGPU, List[int]]) -> Tuple[ArrayOnGPU, ArrayOnGPU]:
     idx_X = cp.arange(X.shape[-1]).reshape([-1, 1, 1])
     idx_Z = cp.arange(Z.shape[-1]).reshape([1, -1, 1])
@@ -97,11 +102,11 @@ def compute_count_sketch(X : ArrayOnGPU, hash_index : ArrayOnGPU, hash_bit : Arr
     hash_mask = cp.asarray(hash_index[:, None] == cp.arange(n_components)[None, :], dtype=X.dtype)
     X_count_sketch = cp.einsum('...i,ij,i->...j', X, hash_mask, hash_bit)
     return X_count_sketch
-    
+
 def convolve_count_sketches(X_count_sketch : ArrayOnGPU, Z_count_sketch : ArrayOnGPU) -> ArrayOnGPU:
     X_count_sketch_fft = cp.fft.fft(X_count_sketch, axis=-1)
     Z_count_sketch_fft = cp.fft.fft(Z_count_sketch, axis=-1)
     XZ_count_sketch = cp.real(cp.fft.ifft(X_count_sketch_fft * Z_count_sketch_fft, axis=-1))
     return XZ_count_sketch
-    
+
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
