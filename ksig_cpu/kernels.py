@@ -88,7 +88,8 @@ class SignatureKernel(SignatureBase):
             M = self.static_kernel(X.reshape((-1, X.shape[-1])), return_on_gpu=True).reshape((X.shape[0], X.shape[1], X.shape[0], X.shape[1])) if Y is None \
                 else self.static_kernel(X.reshape((-1, X.shape[-1])), Y.reshape((-1, Y.shape[-1])), return_on_gpu=True).reshape((X.shape[0], X.shape[1], Y.shape[0], Y.shape[1]))
 
-        K = signature_kern(M, self.n_levels, order=self.order, difference=self.difference, return_levels=self.normalization==1)
+        return_levels = True if self.normalization==1 or self.normalization==3 else False
+        K = signature_kern(M, self.n_levels, order=self.order, difference=self.difference, return_levels=return_levels)
 
         if self.normalization == 1:
             if Y is None:
