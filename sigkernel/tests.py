@@ -1,5 +1,4 @@
 import numpy as np
-import cupy as cp
 import matplotlib.pyplot as plt
 from scipy.optimize import brentq
 
@@ -53,13 +52,14 @@ def norm_func(λ, norms, a=1, c=4):
     powers = np.arange(m) * 2
     return np.sum(norms * np.power(λ, powers)) - psi(norm_sum, a, c)
 
-def get_normalisation_constants(normsq_levels, a=1, C=4):
+def get_normalisation_constants(gram_matrix, a=1, C=4):
     '''
     Calculate normalisation constants for each path
     normsq_levels: np.array of shape (n_samples, n_levels) where n_levels is the number of signature levels
     a: float, parameter for psi function used in the tensor normalisation to get the characteristic signature kernel
     C: float, as above
     '''
+    normsq_levels = matrix_diag(gram_matrix).T
     n_samples = normsq_levels.shape[0]
     normsq = np.sum(normsq_levels, axis=1)
     norm_condition = normsq > C
@@ -76,6 +76,24 @@ def sum_normalise_gram_matrix(K, λ_X, λ_Y, n_levels):
     m_λ = (λ_X[:,np.newaxis] @ λ_Y[np.newaxis,:]) ** np.arange(n_levels+1)[:, np.newaxis, np.newaxis]
     K = np.sum(m_λ * K, axis=0)
     return K
+
+def get_gram_matrices(X, Y, kernel, n_levels, a, C):
+    K_XX = kernel(X,X)
+    λ_X = get_normalisation_constants(K_XX, a, C)
+    K_XX = sum_normalise_gram_matrix(K_XX, λ_X, λ_X, n_levels)
+
+    K_YY = kernel(Y,Y)
+    λ_Y = get_normalisation_constants(K_YY, a, C)
+    K_YY = sum_normalise_gram_matrix(K_YY, λ_Y, λ_Y, n_levels)
+
+    K_XY = kernel(X,Y)
+    K_XY = sum_normalise_gram_matrix(K_XY, λ_X, λ_Y, n_levels)
+
+    # zero the diagonals as the sums will include the diagonals and we need kernel(x,x) excluded i.e. kernel of the same sample
+    np.fill_diagonal(K_XX, 0)
+    np.fill_diagonal(K_YY, 0)
+
+    return K_XX, K_YY, K_XY
 
 def get_permutation_indices(n, m):
     '''
@@ -139,27 +157,8 @@ def sig_kernel_test(X, Y, n_levels, static_kernel, quantile=0.95, num_permutatio
 
     kernel = SignatureKernel(n_levels=n_levels, order=n_levels, normalization=3, static_kernel=static_kernel)
 
-    # calculate Gram matrices
-    K_XX = kernel(X,X)
-    K_XY = kernel(X,Y)
-    K_YY = kernel(Y,Y)
-
-    # calculate tensor norms and which tensors need to be normalised
-    normsq_levels_X = matrix_diag(K_XX).T
-    normsq_levels_Y = matrix_diag(K_YY).T
-
-    # find normalisation constants
-    λ_X = get_normalisation_constants(normsq_levels_X, a, C)
-    λ_Y = get_normalisation_constants(normsq_levels_Y, a, C)
-
-    # normalise at each signature level then sum
-    K_XX = sum_normalise_gram_matrix(K_XX, λ_X, λ_X, n_levels)
-    K_XY = sum_normalise_gram_matrix(K_XY, λ_X, λ_Y, n_levels)
-    K_YY = sum_normalise_gram_matrix(K_YY, λ_Y, λ_Y, n_levels)
-
-    # zero the diagonals as the sums will include the diagonals and we need kernel(x,x) excluded i.e. kernel of the same sample
-    np.fill_diagonal(K_XX, 0)
-    np.fill_diagonal(K_YY, 0)
+    # calculate Gram matrices with normalisation and diagonal of XX/YY zeroed
+    K_XX, K_YY, K_XY = get_gram_matrices(X, Y, kernel, n_levels, a, C)
 
     # unbiased MMD statistic (could also use biased, doesn't matter if we use permutation tests)
     n = len(K_XX)
@@ -191,26 +190,7 @@ def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C
     kernel = SignatureKernel(n_levels=n_levels, order=n_levels, normalization=3, static_kernel=static_kernel)
 
     # calculate Gram matrices
-    K_XX = kernel(X,X)
-    K_XY = kernel(X,Y)
-    K_YY = kernel(Y,Y)
-
-    # calculate tensor norms and which tensors need to be normalised
-    normsq_levels_X = matrix_diag(K_XX).T
-    normsq_levels_Y = matrix_diag(K_YY).T
-
-    # find normalisation constants
-    λ_X = get_normalisation_constants(normsq_levels_X, a, C)
-    λ_Y = get_normalisation_constants(normsq_levels_Y, a, C)
-
-    # normalise at each signature level then sum
-    K_XX = sum_normalise_gram_matrix(K_XX, λ_X, λ_X, n_levels)
-    K_XY = sum_normalise_gram_matrix(K_XY, λ_X, λ_Y, n_levels)
-    K_YY = sum_normalise_gram_matrix(K_YY, λ_Y, λ_Y, n_levels)
-
-    # zero the diagonals as the sums will include the diagonals and we need kernel(x,x) excluded i.e. kernel of the same sample
-    np.fill_diagonal(K_XX, 0)
-    np.fill_diagonal(K_YY, 0)
+    K_XX, K_YY, K_XY = get_gram_matrices(X, Y, kernel, n_levels, a, C)
 
     # unbiased MMD statistic (could also use biased, doesn't matter if we use permutation tests)
     n = len(K_XX)
@@ -239,15 +219,21 @@ def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C
     legend = ['MMD at different split ratios', 'Actual test statistic']
     plt.legend(legend)
 
-def plot_permutation_samples(null_samples, statistic=None):
-    plt.hist(null_samples)
-    plt.axvline(x=np.percentile(null_samples, 2.5), c='b')
-    legend = ['95% quantiles']
+def plot_permutation_samples(null_samples, statistic=None, percentile=0.95, two_tailed=False):
+    plt.hist(null_samples, bins=20)
+
+    if two_tailed:
+        plt.axvline(x=np.percentile(null_samples, 0.5 + 0.5*percentile), c='b')
+        plt.axvline(x=np.percentile(null_samples, 0.5*(1 - percentile)), c='b')
+    else:
+        plt.axvline(x=np.percentile(null_samples, 100-percentile), c='b')
+    legend = [f'{int(100*percentile)}% quantiles']
+
     if statistic is not None:
         plt.axvline(x=statistic, c='r')
         legend += ['Actual test statistic']
+
     plt.legend(legend)
-    plt.axvline(x=np.percentile(null_samples, 97.5), c='b')
     plt.xlabel('Test statistic value')
     plt.ylabel('Counts')
 
