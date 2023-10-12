@@ -220,7 +220,7 @@ def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C
     plt.legend(legend)
 
 def plot_permutation_samples(null_samples, statistic=None, percentile=0.95, two_tailed=False):
-    plt.hist(null_samples, bins=20)
+    plt.hist(null_samples, bins=100)
 
     if two_tailed:
         plt.axvline(x=np.percentile(null_samples, 0.5 + 0.5*percentile), c='b')
@@ -238,9 +238,10 @@ def plot_permutation_samples(null_samples, statistic=None, percentile=0.95, two_
     plt.ylabel('Counts')
 
 # simulate geometric Brownian motion paths
-def gen_GBM_path(mu, sigma, dt, n_paths, seq_len):
+def gen_GBM_path(mu, sigma, dt, n_paths, seq_len, seed=None):
+    rng = np.random.default_rng(seed)
     n_steps = seq_len - 1
-    path = np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * np.random.randn(n_paths, n_steps))
+    path = np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * rng.standard_normal((n_paths, n_steps)))
     path = np.cumprod(path, axis=1)
     path = np.concatenate([np.ones((n_paths, 1)), path], axis=1)
     path = path[..., np.newaxis]
