@@ -142,7 +142,7 @@ def get_permuted_cross_kernel_sum(K_XX, K_YY, K_XY, inds_X_1, inds_Y_1, inds_X_2
                 np.sum(K_XY[np.ix_(inds_X_1, inds_Y_2)]) +
                 np.sum(K_XY[np.ix_(inds_X_2, inds_Y_1)]))
 
-def sig_kernel_test(X, Y, n_levels, static_kernel, quantile=0.95, num_permutations=1000, a=1, C=4):
+def sig_kernel_test(X, Y, n_levels, static_kernel, num_permutations=1000, a=1, C=4, stats_plot=True, quantile=0.95, ratio_plot=True, n_steps=10):
     '''
     X: np.array of shape (n_samples, n_features)
     Y: np.array of shape (n_samples, n_features)
@@ -172,6 +172,34 @@ def sig_kernel_test(X, Y, n_levels, static_kernel, quantile=0.95, num_permutatio
         perm_K_YY_sum = get_permuted_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_2, Y_inds_sample_2)
         perm_K_XY_sum = get_permuted_cross_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_1, Y_inds_sample_1, X_inds_sample_2, Y_inds_sample_2)
         null_mmds[i] = perm_K_XX_sum / (n*(n-1))  + perm_K_YY_sum / (m*(m-1))  - 2*perm_K_XY_sum/(n*m)
+
+    if stats_plot:
+        plot_permutation_samples(null_mmds, statistic=mmd, percentile=quantile)
+
+    if ratio_plot:
+        plt.figure()
+        mmd_splits = np.empty((2, n_steps+1))
+        for i in range(n_steps+1):
+            split = i / n_steps
+            split_x = int(split * n)
+            split_y = int(split * m)
+            X_inds_sample_1 = np.arange(split_x)
+            Y_inds_sample_1 = np.arange(split_y, m)
+            X_inds_sample_2 = np.arange(split_x, n)
+            Y_inds_sample_2 = np.arange(split_y)
+
+            perm_K_XX_sum = get_permuted_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_1, Y_inds_sample_1)
+            perm_K_YY_sum = get_permuted_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_2, Y_inds_sample_2)
+            perm_K_XY_sum = get_permuted_cross_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_1, Y_inds_sample_1, X_inds_sample_2, Y_inds_sample_2)
+
+            mmd_splits[0, i] = split
+            mmd_splits[1, i] = perm_K_XX_sum / (n*(n-1))  + perm_K_YY_sum / (m*(m-1))  - 2*perm_K_XY_sum/(n*m)
+
+        plt.plot(mmd_splits[0], mmd_splits[1])
+        plt.axhline(y=mmd, c='r')
+        legend = ['MMD at different split ratios', 'Actual test statistic']
+        plt.legend(legend)
+
     return mmd, null_mmds
 
 def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C=4):
@@ -230,8 +258,9 @@ def plot_permutation_samples(null_samples, statistic=None, percentile=0.95, two_
     legend = [f'{int(100*percentile)}% quantiles']
 
     if statistic is not None:
+        percentile = (null_samples < statistic).sum() / len(null_samples)
         plt.axvline(x=statistic, c='r')
-        legend += ['Actual test statistic']
+        legend += [f'Test statistic at {int(percentile*100)} percentile']
 
     plt.legend(legend)
     plt.xlabel('Test statistic value')
