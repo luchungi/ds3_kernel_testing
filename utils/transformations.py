@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.patches as patches
@@ -111,3 +112,18 @@ def plottimejoined(X):
     axes.get_xaxis().get_major_formatter().set_useOffset(False)
     # axes.set_aspect('equal', 'datalim')
     plt.show()
+
+def lead_lag_transformation(x):
+    if x.ndim == 1:
+        x = x.reshape(-1, 1)
+    features = x.shape[-1]
+    factor = 2*features
+    stack_list = []
+    x = np.repeat(x.T, factor, axis=1) # transpose required
+    for i in range(factor):
+        stack_list.append(np.roll(x[i%features,...], i)[factor-1:])
+
+    x = np.stack(stack_list, axis=-1)
+    if x.ndim == 3:
+        x = x.transpose(1, 0, 2)
+    return x
