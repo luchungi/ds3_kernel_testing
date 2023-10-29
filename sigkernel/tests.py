@@ -224,7 +224,7 @@ def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C
     # unbiased MMD statistic (could also use biased, doesn't matter if we use permutation tests)
     n = len(K_XX)
     m = len(K_YY)
-    mmd = np.sum(K_XX) / (n*(n-1))  + np.sum(K_YY) / (m*(m-1))  - 2*np.sum(K_XY)/(n*m)
+    mmd = np.sum(K_XX) / (n*(n-1)) + np.sum(K_YY) / (m*(m-1)) - 2*np.sum(K_XY)/(n*m)
 
     mmd_splits = np.empty((2, n_steps+1))
     for i in range(n_steps+1):
