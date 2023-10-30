@@ -46,7 +46,13 @@ def psi(x, a=1, C=4):
     return x
 
 def norm_func(λ, norms, a=1, c=4):
-    # function to solve for root which are the normalisation constants for the characteristic signature kernel
+    '''
+    Function to solve for root which are the normalisation constants for the characteristic signature kernel
+    λ: float, normalisation constant
+    norms: np.array of shape (n_levels,) where n_levels is the number of signature levels
+    a: float, parameter for psi function used in the tensor normalisation to get the characteristic signature kernel
+    C: float, as above
+    '''
     norm_sum = norms.sum()
     m = len(norms)
     λ = np.ones(m) * λ
@@ -60,25 +66,38 @@ def get_normalisation_constants(gram_matrix, a=1, C=4):
     a: float, parameter for psi function used in the tensor normalisation to get the characteristic signature kernel
     C: float, as above
     '''
-    normsq_levels = matrix_diag(gram_matrix).T
+    normsq_levels = matrix_diag(gram_matrix).T # shape (n_samples, n_levels) each row is the norm squared of the signature at each level for a sample
     n_samples = normsq_levels.shape[0]
-    normsq = np.sum(normsq_levels, axis=1)
-    norm_condition = normsq > C
+    normsq = np.sum(normsq_levels, axis=1) # shape (n_samples,) each entry is the norm squared of the signature for a sample
+    norm_condition = normsq > C # check which samples need normalisation
     λ = np.ones(n_samples)
     for i in range(n_samples):
         if norm_condition[i]:
-            λ[i] = brentq(norm_func, 0, 1, args=(normsq_levels[i], a, C))
+            λ[i] = brentq(norm_func, 0, 1, args=(normsq_levels[i], a, C)) # find normalisation constant for each sample
     return λ
 
 def sum_normalise_gram_matrix(K, λ_X, λ_Y, n_levels):
     '''
-    # normalise the gram matrix of a signature kernel at each signature level then sum
+    Normalise the gram matrix of a signature kernel at each signature level then sum
+    K: Gram matrix of the signature kernel np.array of shape (n_samples X, n_samples Y)
+    λ_X: normalisation constants for X np.array of shape (n_samples X,)
+    λ_Y: normalisation constants for Y np.array of shape (n_samples Y,)
+    n_levels: int, number of levels of the signature kernel where level 0 is not included e.g. 3 means signature (t0, t1, t2, t3)
     '''
     m_λ = (λ_X[:,np.newaxis] @ λ_Y[np.newaxis,:]) ** np.arange(n_levels+1)[:, np.newaxis, np.newaxis]
     K = np.sum(m_λ * K, axis=0)
     return K
 
 def get_gram_matrices(X, Y, kernel, n_levels, a, C):
+    '''
+    Calculate the normalised gram matrices for X, Y and X,Y
+    X: np.array of shape (n_samples, n_features)
+    Y: np.array of shape (n_samples, n_features)
+    kernel: the signature kernel to be used
+    n_levels: int, number of levels of the signature kernel where level 0 is not included e.g. 3 means signature (t0, t1, t2, t3)
+    a: float, parameter for psi function used in the tensor normalisation to get the characteristic signature kernel
+    C: float, as above
+    '''
     K_XX = kernel(X,X)
     λ_X = get_normalisation_constants(K_XX, a, C)
     K_XX = sum_normalise_gram_matrix(K_XX, λ_X, λ_X, n_levels)
@@ -104,8 +123,8 @@ def get_permutation_indices(n, m):
     '''
     p = np.random.permutation(n+m)
     sample_1 = p[:n]
-    X_inds_sample_1 = sample_1[sample_1 < n]
-    Y_inds_sample_1 = sample_1[sample_1 >= n] - n
+    X_inds_sample_1 = sample_1[sample_1 < n] # numbers < n are indices for samples in first sample (X)
+    Y_inds_sample_1 = sample_1[sample_1 >= n] - n # numbers >= n are indices for samples in second sample (Y) but need to subtract n to start from 0
     sample_2 = p[n:]
     X_inds_sample_2 = sample_2[sample_2 < n]
     Y_inds_sample_2 = sample_2[sample_2 >= n] - n
@@ -121,27 +140,46 @@ def get_permuted_kernel_sum(K_XX, K_YY, K_XY, inds_X, inds_Y):
     inds_Y: 1D np.array up to size m and containing integers in [0,m]
     '''
     if len(inds_X) == 0:
-        return np.sum(K_YY)
+        return np.sum(K_YY[np.ix_(inds_Y, inds_Y)]) # a[np.ix_([1,3],[2,5])] returns the array [[a[1,2] a[1,5]], [a[3,2] a[3,5]]]
     elif len(inds_Y) == 0:
-        return np.sum(K_XX)
+        return np.sum(K_XX[np.ix_(inds_X, inds_X)])
     else:
         return np.sum(K_XX[np.ix_(inds_X, inds_X)]) + np.sum(K_YY[np.ix_(inds_Y, inds_Y)]) + 2 * np.sum(K_XY[np.ix_(inds_X, inds_Y)])
 
 def get_permuted_cross_kernel_sum(K_XX, K_YY, K_XY, inds_X_1, inds_Y_1, inds_X_2, inds_Y_2):
     '''
     Calculate the sum of the permuted cross gram matrix
+    K_XX: np.array of shape (n, n)
+    K_YY: np.array of shape (m, m)
+    K_XY: np.array of shape (n, m)
+    inds_X_1: 1D np.array up to size n and containing integers in [0,n]
+    inds_Y_1: 1D np.array up to size m and containing integers in [0,m]
+    inds_X_2: 1D np.array up to size n and containing integers in [0,n]
+    inds_Y_2: 1D np.array up to size m and containing integers in [0,m]
     '''
-    if len(inds_X_1) == 0:
-        assert len(inds_Y_2) == 0, 'if inds_X_1 is empty then inds_Y_2 must also be empty'
-        return np.sum(K_XY)
-    elif len(inds_Y_1) == 0:
-        assert len(inds_X_2) == 0, 'if inds_Y_1 is empty then inds_X_2 must also be empty'
-        return np.sum(K_XY)
+    if K_XY.shape[0] == K_XY.shape[1]: # if X and Y have the same number of samples
+        if len(inds_X_1) == 0:
+            assert len(inds_Y_2) == 0, 'if inds_X_1 is empty then inds_Y_2 must also be empty'
+            return np.sum(K_XY)
+        elif len(inds_Y_1) == 0:
+            assert len(inds_X_2) == 0, 'if inds_Y_1 is empty then inds_X_2 must also be empty'
+            return np.sum(K_XY)
     else:
-        return (np.sum(K_XX[np.ix_(inds_X_1, inds_X_2)]) +
-                np.sum(K_YY[np.ix_(inds_Y_1, inds_Y_2)]) +
-                np.sum(K_XY[np.ix_(inds_X_1, inds_Y_2)]) +
-                np.sum(K_XY[np.ix_(inds_X_2, inds_Y_1)]))
+        if len(inds_X_1) == 0: # first permuted sample is all from Y
+            return np.sum(K_YY[np.ix_(inds_Y_1, inds_Y_2)]) + np.sum(K_XY[np.ix_(inds_X_2, inds_Y_1)])
+        elif len(inds_Y_1) == 0: # first permuted sample is all from X
+            return np.sum(K_XX[np.ix_(inds_X_1, inds_X_2)]) + np.sum(K_XY[np.ix_(inds_X_1, inds_Y_2)])
+        elif len(inds_X_2) == 0: # second permuted sample is all from Y
+            return np.sum(K_YY[np.ix_(inds_Y_1, inds_Y_2)]) + np.sum(K_XY[np.ix_(inds_X_1, inds_Y_2)])
+        elif len(inds_Y_2) == 0: # second permuted sample is all from X
+            return np.sum(K_XX[np.ix_(inds_X_1, inds_X_2)]) + np.sum(K_XY[np.ix_(inds_X_1, inds_Y_1)])
+
+    # if we get here then both permuted samples are a mix of X and Y
+    # a[np.ix_([1,3],[2,5])] returns the array [[a[1,2] a[1,5]], [a[3,2] a[3,5]]]
+    return (np.sum(K_XX[np.ix_(inds_X_1, inds_X_2)]) +
+            np.sum(K_YY[np.ix_(inds_Y_1, inds_Y_2)]) +
+            np.sum(K_XY[np.ix_(inds_X_1, inds_Y_2)]) +
+            np.sum(K_XY[np.ix_(inds_X_2, inds_Y_1)]))
 
 def sig_kernel_test(X, Y, n_levels, static_kernel, num_permutations=1000, a=1, C=4, stats_plot=True, percentile=0.9, ratio_plot=True, n_steps=10):
     '''
@@ -177,29 +215,9 @@ def sig_kernel_test(X, Y, n_levels, static_kernel, num_permutations=1000, a=1, C
     if stats_plot:
         plot_permutation_samples(null_mmds, statistic=mmd, percentile=percentile)
 
-    if ratio_plot:
+    if ratio_plot and m==n:
         plt.figure()
-        mmd_splits = np.empty((2, n_steps+1))
-        for i in range(n_steps+1):
-            split = i / n_steps
-            split_x = int(split * n)
-            split_y = int(split * m)
-            X_inds_sample_1 = np.arange(split_x)
-            Y_inds_sample_1 = np.arange(split_y, m)
-            X_inds_sample_2 = np.arange(split_x, n)
-            Y_inds_sample_2 = np.arange(split_y)
-
-            perm_K_XX_sum = get_permuted_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_1, Y_inds_sample_1)
-            perm_K_YY_sum = get_permuted_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_2, Y_inds_sample_2)
-            perm_K_XY_sum = get_permuted_cross_kernel_sum(K_XX, K_YY, K_XY, X_inds_sample_1, Y_inds_sample_1, X_inds_sample_2, Y_inds_sample_2)
-
-            mmd_splits[0, i] = split
-            mmd_splits[1, i] = perm_K_XX_sum / (n*(n-1))  + perm_K_YY_sum / (m*(m-1))  - 2*perm_K_XY_sum/(n*m)
-
-        plt.plot(mmd_splits[0], mmd_splits[1])
-        plt.axhline(y=mmd, c='r')
-        legend = ['MMD at different split ratios', 'Actual test statistic']
-        plt.legend(legend)
+        plot_mmd_splits(K_XX, K_YY, K_XY, n, m, mmd, n_steps)
 
     return mmd, null_mmds
 
@@ -224,8 +242,11 @@ def mmd_permutation_ratio_plot(X, Y, n_levels, static_kernel, n_steps=10, a=1, C
     # unbiased MMD statistic (could also use biased, doesn't matter if we use permutation tests)
     n = len(K_XX)
     m = len(K_YY)
-    mmd = np.sum(K_XX) / (n*(n-1))  + np.sum(K_YY) / (m*(m-1))  - 2*np.sum(K_XY)/(n*m)
+    mmd = np.sum(K_XX) / (n*(n-1)) + np.sum(K_YY) / (m*(m-1)) - 2*np.sum(K_XY)/(n*m)
 
+    plot_mmd_splits(K_XX, K_YY, K_XY, n, m, mmd, n_steps)
+
+def plot_mmd_splits(K_XX, K_YY, K_XY, n, m, mmd, n_steps=10):
     mmd_splits = np.empty((2, n_steps+1))
     for i in range(n_steps+1):
         split = i / n_steps
