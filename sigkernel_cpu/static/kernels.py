@@ -71,6 +71,21 @@ class PolynomialKernel(Kernel):
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+class RBFKernelMix(Kernel):
+    """Mixture of RBF kernels"""
+
+    def __init__(self, sigma : float = 1.0, lengthscale : list = [0.1, 0.5, 1.0]) -> None:
+        self.sigma = utils.check_positive_value(sigma, 'sigma')
+        self.lengthscale = np.asarray(lengthscale)[np.newaxis, np.newaxis, :]
+
+    def _K(self, X : ArrayOnCPU, Y : Optional[ArrayOnCPU] = None) -> ArrayOnCPU:
+        D2_scaled = utils.squared_euclid_dist(X, Y)[..., np.newaxis] / self.lengthscale**2
+        # print(self.lengthscale.shape, utils.squared_euclid_dist(X, Y)[..., np.newaxis].shape, D2_scaled.shape)
+        return self.sigma**2 * np.sum(np.exp(-D2_scaled), axis=-1)
+
+    def _Kdiag(self, X : ArrayOnCPU) -> ArrayOnCPU:
+        return np.full((X.shape[0],), self.sigma**2)
+
 class StationaryKernel(Kernel):
     """Base class for stationary (static) kernels.
 

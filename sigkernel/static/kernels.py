@@ -74,6 +74,21 @@ class PolynomialKernel(Kernel):
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+class RBFKernelMix(Kernel):
+    """Mixture of RBF kernels"""
+
+    def __init__(self, sigma : float = 1.0, lengthscale : list = [0.1, 0.5, 1.0]) -> None:
+        self.sigma = utils.check_positive_value(sigma, 'sigma')
+        self.lengthscale = cp.asarray(lengthscale)[cp.newaxis, cp.newaxis, :]
+
+    def _K(self, X : ArrayOnGPU, Y : Optional[ArrayOnGPU] = None) -> ArrayOnGPU:
+        D2_scaled = utils.squared_euclid_dist(X, Y)[..., cp.newaxis] / self.lengthscale**2
+        # print(self.lengthscale.shape, utils.squared_euclid_dist(X, Y)[..., cp.newaxis].shape, D2_scaled.shape)
+        return self.sigma**2 * cp.sum(cp.exp(-D2_scaled), axis=-1)
+
+    def _Kdiag(self, X : ArrayOnGPU) -> ArrayOnGPU:
+        return cp.full((X.shape[0],), self.sigma**2)
+
 class StationaryKernel(Kernel):
     """Base class for stationary (static) kernels.
 
@@ -93,6 +108,7 @@ class RBFKernel(StationaryKernel):
     def _K(self, X : ArrayOnGPU, Y : Optional[ArrayOnGPU] = None) -> ArrayOnGPU:
         D2_scaled = utils.squared_euclid_dist(X, Y) / self.lengthscale**2
         return self.sigma**2 * cp.exp(-D2_scaled)
+
 
 class Matern12Kernel(StationaryKernel):
     """Matern12 (static) kernel ."""
