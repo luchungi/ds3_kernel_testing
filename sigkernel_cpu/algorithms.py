@@ -58,7 +58,7 @@ def signature_kern_first_order(M : ArrayOnCPU, n_levels : int, difference : bool
     """
 
     if difference:
-        M = np.diff(np.diff(M, axis=1), axis=-1)
+        M = np.diff(np.diff(M, axis=1), axis=-1) # computes d(i,j)(k(x,y)) = k(x(i+1),y(j+1)) + k(x(i),y(j)) - k(x(i+1),y(j)) - k(x(i),y(j+1))
 
     if M.ndim == 4:
         n_X, n_Y = M.shape[0], M.shape[2]
@@ -90,7 +90,7 @@ def signature_kern_higher_order(M : ArrayOnCPU, n_levels : int, order : int, dif
     """
 
     if difference:
-        M = np.diff(np.diff(M, axis=1), axis=-1)
+        M = np.diff(np.diff(M, axis=1), axis=-1) # computes d(i,j)(k(x,y)) = k(x(i+1),y(j+1)) + k(x(i),y(j)) - k(x(i+1),y(j)) - k(x(i),y(j+1))
 
     if M.ndim == 4:
         n_X, n_Y = M.shape[0], M.shape[2]
@@ -104,17 +104,32 @@ def signature_kern_higher_order(M : ArrayOnCPU, n_levels : int, order : int, dif
     else:
         K += np.sum(M, axis=(1, -1))
 
+    print('M')
+    print(M.shape)
+    print(M)
     R = np.copy(M)[None, None, ...]
     for i in range(1, n_levels):
         d = min(i+1, order)
         R_next = np.empty((d, d) + M.shape, dtype=M.dtype)
         R_next[0, 0] = M * multi_cumsum(np.sum(R, axis=(0, 1)), exclusive=True, axis=(1, -1))
+        print('R_next[0, 0]')
+        print(R_next[0, 0])
         for r in range(1, d):
+            print(f'r={r}')
+            print(M * multi_cumsum(np.sum(R[:, r-1], axis=0), exclusive=True, axis=1))
+            print(M * multi_cumsum(np.sum(R[r-1, :], axis=0), exclusive=True, axis=-1))
             R_next[0, r] = 1./(r+1) * M * multi_cumsum(np.sum(R[:, r-1], axis=0), exclusive=True, axis=1)
             R_next[r, 0] = 1./(r+1) * M * multi_cumsum(np.sum(R[r-1, :], axis=0), exclusive=True, axis=-1)
             for s in range(1, d):
+                print(f's={s}')
+                print(1./((r+1)*(s+1)) * M * R[r-1, s-1])
                 R_next[r, s] = 1./((r+1)*(s+1)) * M * R[r-1, s-1]
         R = R_next
+        print('R')
+        print(R.shape)
+        print(R)
+        print('R_sum')
+        print(np.sum(R, axis=(0, 1, 3, -1)))
         if return_levels:
             K.append(np.sum(R, axis=(0, 1, 3, -1)))
         else:

@@ -59,7 +59,7 @@ def signature_kern_first_order(M : ArrayOnGPU, n_levels : int, difference : bool
     """
 
     if difference:
-        M = cp.diff(cp.diff(M, axis=1), axis=-1)
+        M = cp.diff(cp.diff(M, axis=1), axis=-1) # computes d(i,j)(k(x,y)) = k(x(i+1),y(j+1)) + k(x(i),y(j)) - k(x(i+1),y(j)) - k(x(i),y(j+1))
 
     if M.ndim == 4:
         n_X, n_Y = M.shape[0], M.shape[2]
@@ -91,7 +91,7 @@ def signature_kern_higher_order(M : ArrayOnGPU, n_levels : int, order : int, dif
     """
 
     if difference:
-        M = cp.diff(cp.diff(M, axis=1), axis=-1)
+        M = cp.diff(cp.diff(M, axis=1), axis=-1) # computes d(i,j)(k(x,y)) = k(x(i+1),y(j+1)) + k(x(i),y(j)) - k(x(i+1),y(j)) - k(x(i),y(j+1))
 
     if M.ndim == 4:
         n_X, n_Y = M.shape[0], M.shape[2]
